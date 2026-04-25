@@ -24,6 +24,6 @@ with st.sidebar:
 
     render_upload_panel()
     render_debt_panel()
-    render_memory_panel()
+    render_memory_panel(student_id)
 
 render_chat_window()
