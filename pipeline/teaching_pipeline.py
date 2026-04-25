@@ -1,0 +1,3 @@
+"""
+Teaching pipeline orchestration logic.
+"""

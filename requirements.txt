@@ -1,0 +1,28 @@
+# LLM API
+google-generativeai>=0.7.0
+langchain-google-genai>=1.0.0
+
+# RAG and embeddings
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-chroma>=0.1.0
+chromadb>=0.5.0
+sentence-transformers>=3.0.0
+tiktoken>=0.7.0
+
+# Document parsing
+pypdf>=4.0.0
+python-pptx>=0.6.23
+python-docx>=1.1.0
+
+# Database and config
+sqlalchemy>=2.0.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# UI
+streamlit>=1.32.0
+
+# Evaluation
+pandas>=2.0.0
+numpy>=1.26.0
