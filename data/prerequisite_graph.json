@@ -1,4 +1,18 @@
 {
+<<<<<<< HEAD
+  "logistic_regression": ["linear_regression", "classification"],
+  "neural_networks": ["logistic_regression", "linear_algebra", "activation_functions", "backpropagation"],
+  "cnn": ["neural_networks", "feature_extraction", "convolution", "pooling"],
+  "rnn": ["neural_networks", "sequence_modeling", "hidden_state"],
+  "lstm_gru": ["rnn", "gates", "hidden_state", "vanishing_gradient"],
+  "word_representations": ["dimensionality_reduction", "feature_extraction", "embeddings"],
+  "transformers": ["word_representations", "attention_mechanisms", "neural_networks", "positional_encoding"],
+  "llm_training": ["transformers", "optimization_algorithms", "loss_functions"],
+  "nlp_basics": ["tokenization", "probability", "text_preprocessing"],
+  "tokenization": ["nlp_intro"],
+  "transfer_learning": ["cnn", "neural_networks", "pretrained_models"]
+}
+=======
   "logistic_regression": ["linear_regression"],
   "classification": ["logistic_regression"],
   "decision_tree": ["classification"],
@@ -16,3 +30,4 @@
   "scaling_laws": ["transformers", "llm_training"],
   "llm_ethics": ["llm_intro"]
 }
+>>>>>>> main
