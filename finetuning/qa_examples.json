@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "question": "What is gradient descent?",
+    "answer": "Gradient descent is an optimization method used to reduce a model's loss step by step. The model looks at the direction where the loss increases fastest, called the gradient, and then moves the parameters in the opposite direction. The main idea is not to guess the best weights directly, but to improve them gradually. A common mistake is thinking gradient descent changes the training data; it actually updates the model's parameters."
+  },
+  {
+    "question": "What is a loss function?",
+    "answer": "A loss function measures how wrong a model's prediction is compared to the correct answer. If the loss is high, the model is performing poorly; if the loss is low, the model is closer to the target. During training, the model tries to adjust its weights to minimize this loss. The loss function is important because it gives the model a clear signal for what needs to improve."
+  },
+  {
+    "question": "Why do we split data into training, validation, and test sets?",
+    "answer": "The training set is used to teach the model, the validation set is used to tune decisions during development, and the test set is used only at the end to estimate real performance. This separation prevents the model from being evaluated on data it has already seen. If we test on training data, the result may look good even if the model cannot generalize. The test set acts like a final exam for the model."
+  },
+  {
+    "question": "What is overfitting?",
+    "answer": "Overfitting happens when a model learns the training data too specifically, including noise or accidental patterns. It performs well on training examples but poorly on new data. Think of it like memorizing the answers to a practice exam instead of learning the topic. The model looks smart during training but fails when the question changes."
+  },
+  {
+    "question": "What is regularization?",
+    "answer": "Regularization is a technique used to reduce overfitting by discouraging the model from becoming too complex. It adds a penalty to the loss when the model relies on very large or overly specific weights. The goal is to make the model learn patterns that generalize better, not patterns that only fit the training set. Regularization is like forcing the model to choose a simpler explanation when possible."
+  },
+  {
+    "question": "Why do we use softmax in classification?",
+    "answer": "Softmax converts raw model scores, called logits, into probabilities that sum to 1. This is useful in multi-class classification because it lets us compare how confident the model is about each class. For example, instead of just saying one class has score 5 and another has score 2, softmax turns those scores into a probability distribution. A common mistake is thinking softmax chooses the answer by itself; it only converts scores into probabilities."
+  },
+  {
+    "question": "What is backpropagation?",
+    "answer": "Backpropagation is the process used to calculate how much each weight contributed to the model's error. It sends the error signal backward through the network using the chain rule from calculus. Once the gradients are calculated, an optimizer such as gradient descent updates the weights. Backpropagation does not directly make predictions; it helps the model learn from wrong predictions."
+  },
+  {
+    "question": "What is a learning rate?",
+    "answer": "The learning rate controls how large each update step is during training. If it is too large, the model may jump around and miss the best solution. If it is too small, training may become very slow. A good learning rate helps the model move steadily toward lower loss without becoming unstable."
+  },
+  {
+    "question": "What is an attention mechanism?",
+    "answer": "An attention mechanism lets a model decide which parts of the input are most relevant when producing an output. Instead of treating all tokens equally, it assigns different weights to different tokens. In transformers, attention uses queries, keys, and values to calculate relevance scores. A common misconception is that attention selects only one word; usually, it forms a weighted combination of multiple words."
+  },
+  {
+    "question": "What is a confusion matrix?",
+    "answer": "A confusion matrix is a table that shows how a classifier's predictions compare to the true labels. It counts correct predictions and different types of mistakes, such as false positives and false negatives. This is useful because accuracy alone can hide important errors, especially when classes are imbalanced. The confusion matrix helps us see where the model is confused."
+  }
+]
