@@ -23,7 +23,7 @@ with st.sidebar:
     student_id = st.text_input("Student ID", value="student_001")
 
     render_upload_panel()
-    render_debt_panel()
+    render_debt_panel(student_id)
     render_memory_panel(student_id)
 
 render_chat_window()
