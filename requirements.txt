@@ -27,3 +27,4 @@ streamlit>=1.32.0
 # Evaluation
 pandas>=2.0.0
 numpy>=1.26.0
+
