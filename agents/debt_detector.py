@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
-from schemas import DebtEntry
+from pipeline.schemas import DebtEntry
 
 
 GRAPH_PATH = Path("data/prerequisite_graph.json")

@@ -6,7 +6,7 @@ from google import genai
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
-from schemas import Chunk
+from pipeline.schemas import Chunk
 
 
 PERSIST_DIR = "./data/vector_db"

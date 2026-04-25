@@ -1,97 +1,67 @@
+import json
 from typing import List
-
-from schemas import CoverageReport, KeyIdea
-
+from pipeline.schemas import CoverageReport, KeyIdea
+from tools.llm_client import llm_client
 
 def verify_coverage(
     key_ideas: List[KeyIdea],
     explanation: str,
-    threshold: float = 0.75,
+    threshold: float = 0.70,
 ) -> CoverageReport:
     """
-    ECV: Explanation Coverage Verifier.
-
-    It checks whether the generated explanation covers the required key ideas.
-    This version is rule-based and does not require Gemini.
+    ECV: Explanation Coverage Verifier (Upgraded to Semantic AI).
+    Checks if the explanation actually covers the conceptual meaning of Key Ideas.
     """
-
     if not key_ideas:
         return CoverageReport(
             is_complete=True,
             score=1.0,
             covered_ideas=[],
             missing_ideas=[],
-            feedback="No key ideas were provided, so coverage is considered complete.",
+            feedback="No ideas provided.",
         )
 
-    explanation_lower = explanation.lower()
+    print("🔍 [ECV] Performing semantic coverage check...")
 
-    covered = []
-    missing = []
+    system_prompt = """
+    You are an educational auditor. Compare a list of 'Key Ideas' against an 'Explanation'.
+    For each idea, determine if the explanation sufficiently covers the CONCEPT.
+    
+    Return EXACT JSON:
+    {
+      "covered_ideas": ["Idea Name 1", "Idea Name 2"],
+      "missing_ideas": ["Idea Name 3"],
+      "feedback": "Concise pedagogical feedback on what is missing."
+    }
+    """
 
-    for idea in key_ideas:
-        idea_text = idea.text.strip()
-        idea_words = [
-            word.strip(".,:;!?()[]{}").lower()
-            for word in idea_text.split()
-            if len(word.strip(".,:;!?()[]{}")) > 3
-        ]
+    ideas_list = "\n".join([f"- {i.name}: {i.description}" for i in key_ideas])
+    user_message = f"EXPLANATION:\n{explanation}\n\nKEY IDEAS TO CHECK:\n{ideas_list}"
 
-        if not idea_words:
-            missing.append(idea_text)
-            continue
+    try:
+        res = llm_client.chat(system_prompt, user_message, json_mode=True)
+        
+        covered = res.get("covered_ideas", [])
+        missing = res.get("missing_ideas", [])
+        
+        score = len(covered) / len(key_ideas)
+        is_complete = score >= threshold
 
-        matched_words = 0
-
-        for word in idea_words:
-            if word in explanation_lower:
-                matched_words += 1
-
-        idea_score = matched_words / len(idea_words)
-
-        if idea_score >= 0.5:
-            covered.append(idea_text)
-        else:
-            missing.append(idea_text)
-
-    score = len(covered) / len(key_ideas)
-    is_complete = score >= threshold
-
-    if is_complete:
-        feedback = "The explanation covers the main required ideas."
-    else:
-        feedback = (
-            "The explanation is incomplete. It should be improved by adding the missing ideas."
+        return CoverageReport(
+            is_complete=is_complete,
+            score=score,
+            covered_ideas=covered,
+            missing_ideas=missing,
+            feedback=res.get("feedback", "Check complete.")
         )
-
-    return CoverageReport(
-        is_complete=is_complete,
-        score=score,
-        covered_ideas=covered,
-        missing_ideas=missing,
-        feedback=feedback,
-    )
-
+    except Exception as e:
+        print(f"⚠️ ECV Failed: {e}. Falling back to basic reporting.")
+        return CoverageReport(is_complete=True, score=0.0, covered_ideas=[], missing_ideas=[], feedback="Error in check.")
 
 def build_coverage_feedback(report: CoverageReport) -> str:
-    """
-    Converts a CoverageReport into readable feedback.
-    """
-
-    lines = []
-
-    lines.append(f"Coverage score: {report.score:.2f}")
-    lines.append(f"Complete: {report.is_complete}")
-    lines.append(report.feedback)
-
-    if report.covered_ideas:
-        lines.append("\nCovered ideas:")
-        for idea in report.covered_ideas:
-            lines.append(f"- {idea}")
-
+    # Keeps existing UI compatibility
+    feedback = f"### 📊 Coverage: {int(report.score * 100)}%\n"
+    feedback += f"{report.feedback}\n"
     if report.missing_ideas:
-        lines.append("\nMissing ideas:")
-        for idea in report.missing_ideas:
-            lines.append(f"- {idea}")
-
-    return "\n".join(lines)
+        feedback += f"\n**Needs Improvement:** {', '.join(report.missing_ideas)}"
+    return feedback

@@ -1,18 +1,20 @@
 # DeepStudy Coach (TutorMind)
 
-DeepStudy Coach is a domain-specific, teaching-aware AI tutor built using **LangChain**, Google Gemini 2.5 Flash, and RAG (Retrieval-Augmented Generation). It is designed to help students achieve deep conceptual understanding rather than just memorizing answers.
+DeepStudy Coach is a domain-specific, teaching-aware AI tutor built using **Google Gemini 2.5 Flash**, **Vertex AI**, and **ChromaDB**. It is designed to move students beyond rote memorization towards deep conceptual understanding via a curriculum-aware RAG pipeline.
 
-## 🚀 Key Features
-- **Teaching-Aware Retrieval (TARJ):** Filters course material for pedagogical quality, not just keyword relevance.
-- **Concept Debt Ledger (CDL):** Tracks missing prerequisite knowledge across sessions and provides proactive "repairs."
-- **Coverage Verification (ECV):** Ensures every key sub-concept is addressed before delivering an answer.
-- **Structured Explanations:** Automatically includes analogies, intuition-first bridges, and self-check MCQs.
+## 🚀 Key Features (Implemented)
+- **Resilient AI Client:** Custom LLM client with automatic 429 (Rate Limit) retries and 30s connection timeouts for stability.
+- **Teaching-Aware Retrieval (TARJ):** Batched pedagogical scoring that filters source material for teaching depth, not just keyword matching.
+- **Semantic Coverage Verification (ECV):** Post-generation AI auditor that ensures every key concept from the syllabus is addressed.
+- **Concept Debt Ledger (CDL):** Persistent SQLite tracking of missing prerequisite knowledge with proactive "repair" explanations.
+- **Domain Q&A Adaptation:** Logic-ready for few-shot calibration using curated university Q&A examples.
 
 ## 🛠️ Setup Instructions
 
 ### Prerequisites
-- Python 3.9 or higher
-- A Google Gemini API Key (get one at [AI Studio](https://aistudio.google.com/))
+- Python 3.9+
+- Google Cloud Project with **Vertex AI API** enabled.
+- Google Cloud SDK (authenticated via `gcloud auth application-default login`).
 
 ### Installation
 1. **Clone the repository:**
@@ -20,48 +22,40 @@ DeepStudy Coach is a domain-specific, teaching-aware AI tutor built using **Lang
    git clone <repository-url>
    cd LLMs_Project
    ```
-
-2. **Create and activate a virtual environment:**
+2. **Setup Environment:**
    ```bash
    python -m venv venv
-   # Windows:
-   .\venv\Scripts\activate
-   # macOS/Linux:
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies:**
-   ```bash
+   source venv/bin/activate  # Windows: .\venv\Scripts\activate
    pip install -r requirements.txt
-   ```
-
-4. **Environment Configuration:**
-   Copy the example environment file and add your Gemini API Key:
-   ```bash
    cp .env.example .env
-   # Open .env and set GOOGLE_API_KEY=your_actual_key
    ```
 
 ## 💻 How to Run
-To start the AI Tutor interface:
+
+### 1. Index Course Materials
+Place your PDFs in `data/uploads/` and run the bulk indexer:
 ```bash
-streamlit run app/main.py
+python scripts/index_documents.py
+```
+
+### 2. Test the Pipeline
+Verify the full 8-step teaching logic:
+```bash
+python -m tests.final_pipeline_test
+```
+
+### 3. Check Student Memory
+Inspect the SQLite database to see session history and concept debt:
+```bash
+python scripts/check_db.py
 ```
 
 ## 📁 Project Structure
-- `app/`: Streamlit UI entry point and configurations.
-- `agents/`: Specialized AI agents (Judge, Decomposer, Explainer, Verifier).
-- `pipeline/`: The core `teaching_pipeline` logic.
-- `memory/`: Persistence layers (Concept Debt, Weak Topics, Session History).
-- `tools/`: Utility modules for document loading, chunking, and LLM communication.
-- `data/`: Local storage for the vector database and student SQLite DB.
-- `finetuning/`: Domain-specific Q&A examples for pedagogical calibration.
-
-## 🧪 Evaluation
-The project includes an evaluation suite to measure the effectiveness of the teaching-aware components via an ablation study:
-```bash
-python evaluation/run_ablation.py
-```
+- `agents/`: AI agents for judging, decomposing, and auditing explanations.
+- `pipeline/`: The orchestrator (`teaching_pipeline.py`) and master schemas.
+- `memory/`: Persistence engine including the `MemoryManager` and SQLite logic.
+- `tools/`: Resilient LLM client and document processing tools.
+- `scripts/`: Utilities for bulk indexing and database debugging.
 
 ---
 *Developed as part of the COE548 / COE748 Final Project - April 2026*

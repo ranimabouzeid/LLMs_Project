@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from schemas import Chunk
+from pipeline.schemas import Chunk
 
 
 def chunk_text(

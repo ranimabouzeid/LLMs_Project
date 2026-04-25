@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from typing import Optional, Dict, Any, Union
 from dotenv import load_dotenv
 from google import genai
@@ -10,54 +11,74 @@ load_dotenv()
 class LLMClient:
     """
     Unified client for interacting with Gemini via Vertex AI.
-    Handles authentication, system prompts, and structured JSON output.
+    Optimized for Gemini 2.5 with explicit timeouts and retry logic.
     """
     def __init__(self):
         self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        # Ensure we use the verified location
         self.location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-        self.model_name = "gemini-2.5-flash"  # Using the latest Gen 2.5 model
+        self.model_name = "gemini-2.5-flash"
         
-        # Initialize the Modern GenAI Client for Vertex AI
+        # Initialize client with a strict 30s timeout for the whole request
         self.client = genai.Client(
             vertexai=True,
             project=self.project_id,
-            location=self.location
+            location=self.location,
+            http_options={'timeout': 30000} # 30 seconds in milliseconds
         )
 
     def chat(self, 
              system_prompt: str, 
              user_message: str, 
              json_mode: bool = False,
-             temperature: float = 0.2) -> Union[str, Dict[str, Any]]:
-        """
-        Sends a message to Gemini and returns the response.
-        """
+             temperature: float = 0.2,
+             max_retries: int = 2) -> Union[str, Dict[str, Any]]:
+        
+        # Combine system prompt into user message as a fallback for 2.5 stability
+        combined_message = f"INSTRUCTIONS:\n{system_prompt}\n\nUSER INPUT:\n{user_message}"
+        
         config = {
-            "system_instruction": system_prompt,
             "temperature": temperature,
         }
 
-        # If JSON mode is requested, force the output format
         if json_mode:
             config["response_mime_type"] = "application/json"
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=user_message,
-                config=types.GenerateContentConfig(**config)
-            )
+        for attempt in range(max_retries):
+            try:
+                print(f"   [LLM] Calling {self.model_name} (Attempt {attempt+1})...")
+                
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=combined_message,
+                    config=types.GenerateContentConfig(**config)
+                )
 
-            if json_mode:
-                # Parse and return as a Python dictionary
-                return json.loads(response.text)
-            
-            return response.text
+                if not response or not response.text:
+                    print("   ⚠️ Empty response. Retrying...")
+                    continue
 
-        except Exception as e:
-            print(f"Error calling LLM: {str(e)}")
-            # Return an empty dict or error message so the pipeline doesn't crash
-            return {} if json_mode else f"Error: {str(e)}"
+                if json_mode:
+                    try:
+                        # Strip markdown code blocks if the model accidentally includes them
+                        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+                        return json.loads(clean_text)
+                    except json.JSONDecodeError:
+                        print("   ⚠️ Invalid JSON. Retrying...")
+                        continue
+                
+                return response.text
 
-# Singleton instance for easy importing across the project
+            except Exception as e:
+                print(f"   ❌ LLM Attempt {attempt+1} failed: {str(e)}")
+                if "429" in str(e):
+                    print("   ⏳ Rate limit hit. Waiting 5 seconds...")
+                    time.sleep(5)
+                elif attempt < max_retries - 1:
+                    time.sleep(2)
+                else:
+                    break
+
+        return {} if json_mode else "Connection error. Please check your network or API quota."
+
 llm_client = LLMClient()

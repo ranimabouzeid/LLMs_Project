@@ -12,12 +12,15 @@ venv/
 ENV/
 .venv/
 
-# Local Data Storage (Member 2 and 3)
+# Local Data Storage (Ignore databases and indexes)
 data/uploads/*
 data/chroma_db/*
 data/vector_db/*
 *.db
 *.sqlite
+*.bin
+*.sqlite3
+
 
 # OS and IDEs
 .vscode/

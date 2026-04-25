@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any
 
-from schemas import DebtEntry
+from pipeline.schemas import DebtEntry
 
 
 DB_PATH = Path("data/concept_debt_ledger.db")
