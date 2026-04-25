@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 class KeyIdea(BaseModel):
     """Output of Member 1's Decomposer"""
