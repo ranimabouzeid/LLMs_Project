@@ -21,9 +21,13 @@ st.caption("Teaching-aware LLM tutor with RAG and student memory")
 with st.sidebar:
     st.header("Student")
     student_id = st.text_input("Student ID", value="student_001")
+    
+    if st.button("Clear Chat History"):
+        st.session_state.messages = []
+        st.rerun()
 
-    render_upload_panel()
+    render_upload_panel(student_id)
     render_debt_panel(student_id)
     render_memory_panel(student_id)
 
-render_chat_window()
+render_chat_window(student_id)

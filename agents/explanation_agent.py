@@ -1,43 +1,58 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from tools.llm_client import llm_client
 from pipeline.prompts import EXPLANATION_SYSTEM_PROMPT
 from pipeline.schemas import KeyIdea, Chunk, DebtEntry
+from pathlib import Path
 
 class ExplanationAgent:
     """
     The main agent responsible for generating the structured pedagogical response.
     """
     def __init__(self):
-        self.system_prompt = EXPLANATION_SYSTEM_PROMPT
+        prompt_path = Path("pipeline/domain_prompt.txt")
+        if prompt_path.exists():
+            self.system_prompt = prompt_path.read_text(encoding="utf-8")
+        else:
+            self.system_prompt = EXPLANATION_SYSTEM_PROMPT
 
     def generate_explanation(self, 
                              query: str, 
                              key_ideas: List[KeyIdea], 
                              approved_chunks: List[Chunk], 
-                             open_debts: List[DebtEntry] = []) -> str:
+                             open_debts: List[DebtEntry] = [],
+                             history: List[Dict[str, str]] = []) -> str:
         """
-        Generates a deep explanation using the approved chunks and addressing key ideas.
-        If open_debts are provided, it prepends a 'Prerequisite Repair' section.
+        Generates a deep explanation using chunks, history, and addressing key ideas.
         """
         
         # 1. Build the context from retrieved chunks
-        context_text = "\n\n".join([f"[Source: {c.metadata.get('source', 'Unknown')}] {c.text}" for c in approved_chunks])
+        context_text = "\n\n".join([f"[Source: {c.metadata.get('source_file', 'Unknown')}] {c.text}" for c in approved_chunks])
         
         # 2. Build the list of must-cover ideas
         ideas_text = "\n".join([f"- {i.name}: {i.description}" for i in key_ideas])
         
-        # 3. Handle Prerequisite Repairs (The CDL logic)
+        # 3. Format History for the AI
+        history_text = ""
+        if history:
+            history_text = "CONVERSATION HISTORY:\n"
+            for msg in history[-5:]: # Last 5 messages for context
+                role = "Student" if msg["role"] == "user" else "TutorMind"
+                history_text += f"{role}: {msg['content'][:500]}...\n"
+            history_text += "\n"
+
+        # 4. Handle Prerequisite Repairs
         repair_text = ""
         if open_debts:
             repair_text = "### 🛠️ Prerequisite Foundations\n"
             repair_text += "Before we dive in, let's quickly clarify some concepts you struggled with recently:\n"
             for debt in open_debts:
-                repair_text += f"- {debt.prerequisite_concept}: (Briefly explained based on your history)\n"
+                repair_text += f"- {debt.prerequisite_concept}: {debt.evidence}\n"
             repair_text += "\n---\n\n"
 
-        # 4. Construct the final prompt
+        # 5. Construct final prompt
         full_user_msg = f"""
-STUDENT QUESTION: {query}
+{history_text}
+STUDENT QUESTION/RESPONSE: {query}
 
 ESSENTIAL KEY IDEAS TO COVER:
 {ideas_text}
@@ -46,10 +61,10 @@ SOURCE MATERIAL (Use ONLY these facts):
 {context_text}
 
 INSTRUCTIONS:
-Generate a response following the 'DeepStudy Coach' structure: Analogy, Connection, Breakdown, The Trap, and Challenge.
+- If the student is answering a question you asked, evaluate their answer first.
+- If they are asking a new question, follow the 'DeepStudy Coach' structure: Analogy, Connection, Breakdown, The Trap, and Challenge.
 """
         
-        # We don't use JSON mode here because we want a rich, formatted Markdown explanation.
         explanation = llm_client.chat(
             system_prompt=self.system_prompt,
             user_message=full_user_msg,

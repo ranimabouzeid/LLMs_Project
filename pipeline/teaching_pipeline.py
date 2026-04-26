@@ -21,7 +21,10 @@ class TeachingPipeline:
         self.memory = MemoryManager()
         self.cdl = ConceptDebtLedger()
 
-    def run_pipeline(self, query: str, student_id: str = "default_student") -> Dict[str, Any]:
+    def run_pipeline(self, 
+                     query: str, 
+                     student_id: str = "default_student", 
+                     history: List[Dict[str, str]] = []) -> Dict[str, Any]:
         """
         Executes the full pedagogical flow.
         """
@@ -33,9 +36,13 @@ class TeachingPipeline:
         if open_debts:
             print(f"   ⚠️ Found {len(open_debts)} prerequisites that need repair.")
 
-        # STEP 2: Real Retrieval
-        print("📡 Step 2: Retrieving course materials from ChromaDB...")
-        search_results = self.knowledge_store.search(query, k=5)
+        # STEP 2: Real Retrieval with student_id filtering
+        print(f"📡 Step 2: Retrieving course materials for {student_id}...")
+        search_results = self.knowledge_store.search(
+            query, 
+            k=5, 
+            filter={"student_id": student_id} 
+        )
         
         # Convert LangChain Documents back to our Chunk schema
         raw_chunks = []
@@ -61,13 +68,13 @@ class TeachingPipeline:
             query=query,
             key_ideas=key_ideas,
             approved_chunks=approved_chunks,
-            open_debts=open_debts
+            open_debts=open_debts,
+            history=history
         )
 
         # STEP 6: ECV Coverage Check
         print("🔍 Step 6: Verifying explanation coverage...")
         report = verify_coverage(key_ideas, explanation)
-        coverage_report = build_coverage_feedback(report)
 
         # STEP 7: Question Generation
         print("❓ Step 7: Generating assessment questions...")
@@ -89,7 +96,7 @@ class TeachingPipeline:
             "explanation": explanation,
             "key_ideas": key_ideas,
             "sources": approved_chunks,
-            "coverage": coverage_report,
+            "coverage": report,
             "questions": questions
         }
 

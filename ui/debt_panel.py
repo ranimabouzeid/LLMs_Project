@@ -19,7 +19,7 @@ def _get_open_debts(student_id: str) -> list[tuple]:
 
     cur.execute(
         """
-        SELECT target_concept, prerequisite_concept, severity, evidence, created_at
+        SELECT topic, prerequisite_concept, severity, evidence, created_at
         FROM concept_debt
         WHERE student_id = ? AND status = 'open'
         ORDER BY severity DESC, created_at DESC

@@ -45,15 +45,18 @@ def render_coverage_report(report: Optional[Any] = None) -> None:
             st.caption("No coverage report yet.")
             return
 
-        covered = _get_value(report, "covered", [])
-        partial = _get_value(report, "partial", [])
-        missing = _get_value(report, "missing", [])
-        supplement_added = bool(_get_value(report, "supplement_added", False))
-        supplement_text = _get_value(report, "supplement_text", None)
+        covered = _get_value(report, "covered_ideas", [])
+        missing = _get_value(report, "missing_ideas", [])
+        supplement_added = bool(_get_value(report, "supplement", False))
+        supplement_text = _get_value(report, "supplement", None)
+        feedback = _get_value(report, "feedback", None)
 
         _render_list("Covered Key Ideas", covered)
-        _render_list("Partially Covered Key Ideas", partial)
         _render_list("Missing Key Ideas", missing)
+
+        if feedback:
+            st.markdown("**Pedagogical Feedback**")
+            st.write(feedback)
 
         st.markdown("**Supplement Added**")
         st.write("Yes" if supplement_added else "No")

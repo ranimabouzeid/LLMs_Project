@@ -129,5 +129,8 @@ class ChromaEmbedder:
 
         print(f"Stored {len(chunks)} chunks in ChromaDB.")
 
-    def search(self, query: str, k: int = 5) -> List[Any]:
-        return self.vector_store.similarity_search(query=query, k=k)
+    def search(self, query: str, k: int = 5, filter: dict = None) -> List[Any]:
+        """
+        Search for documents, optionally filtering by metadata (like student_id).
+        """
+        return self.vector_store.similarity_search(query=query, k=k, filter=filter)

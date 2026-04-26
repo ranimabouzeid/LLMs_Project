@@ -1,87 +1,38 @@
-from typing import Any, Dict, List
-
+import uuid
+from typing import List, Dict, Any
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pipeline.schemas import Chunk
 
-
-def chunk_text(
-    text: str,
-    source_file: str,
-    page_number=None,
-    max_words: int = 180,
-    overlap_words: int = 40,
-) -> List[Chunk]:
+def chunk_loaded_pages(pages: List[Dict[str, Any]], chunk_size: int = 500, chunk_overlap: int = 50) -> List[Chunk]:
     """
-    Splits one text block into overlapping chunks.
+    Splits loaded pages into smaller semantic chunks while PRESERVING all metadata (student_id, file_type, etc).
     """
-    words = text.split()
-
-    if not words:
-        return []
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        is_separator_regex=False,
+    )
 
     chunks = []
-    start = 0
-    chunk_index = 0
-
-    while start < len(words):
-        end = start + max_words
-        chunk_words = words[start:end]
-        chunk_content = " ".join(chunk_words)
-
-        chunk_id = f"{source_file}_page_{page_number}_chunk_{chunk_index}"
-
-        chunk = Chunk(
-            chunk_id=chunk_id,
-            text=chunk_content,
-            source_file=source_file,
-            page_number=page_number,
-            chunk_index=chunk_index,
-            metadata={
-                "source_file": source_file,
-                "filename": source_file,
-                "page": page_number,
-                "page_number": page_number,
-                "chunk_index": chunk_index,
-            },
-        )
-
-        chunks.append(chunk)
-
-        if end >= len(words):
-            break
-
-        start += max_words - overlap_words
-        chunk_index += 1
+    
+    for page in pages:
+        text = page.get("text", "")
+        # Split the text of this specific page
+        texts = text_splitter.split_text(text)
+        
+        for i, split_text in enumerate(texts):
+            # Create a unique ID for this chunk
+            chunk_id = str(uuid.uuid4())
+            
+            # Create the Chunk object, carrying over EVERYTHING from the page dict
+            chunks.append(Chunk(
+                chunk_id=chunk_id,
+                text=split_text,
+                source_file=page.get("source_file"),
+                page_number=page.get("page_number"),
+                chunk_index=i,
+                metadata=page # This now contains student_id, file_type, etc.
+            ))
 
     return chunks
-
-
-def chunk_loaded_pages(
-    loaded_pages: List[Dict[str, Any]],
-    max_words: int = 180,
-    overlap_words: int = 40,
-) -> List[Chunk]:
-    """
-    Converts loaded document pages/slides into chunks.
-    Input comes from document_loader.py.
-    """
-    all_chunks = []
-
-    for page in loaded_pages:
-        text = page.get("text", "")
-        source_file = page.get("source_file", "unknown_source")
-        page_number = page.get("page_number")
-
-        chunks = chunk_text(
-            text=text,
-            source_file=source_file,
-            page_number=page_number,
-            max_words=max_words,
-            overlap_words=overlap_words,
-        )
-
-        for chunk in chunks:
-            chunk.metadata["file_type"] = page.get("file_type")
-
-        all_chunks.extend(chunks)
-
-    return all_chunks

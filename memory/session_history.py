@@ -21,10 +21,10 @@ def get_recent_sessions(student_id, limit=5):
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT topic, summary, created_at
+        SELECT query, summary, timestamp
         FROM session_history
         WHERE student_id = ?
-        ORDER BY created_at DESC
+        ORDER BY timestamp DESC
         LIMIT ?
     """, (student_id, limit))
 

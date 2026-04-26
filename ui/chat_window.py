@@ -1,39 +1,97 @@
 """
-Chat window UI for TutorMind.
-
-Currently renders a placeholder response until the full teaching pipeline
-is connected by the pipeline owner.
+Chat window UI for TutorMind with persistent conversation history and interactive, detailed MCQs/Short Answers (Wired to Memory).
 """
 
 from typing import Optional
-
 import streamlit as st
-
 from ui.coverage_display import render_coverage_report
 from ui.source_display import render_sources
+from pipeline.teaching_pipeline import pipeline
+from agents.question_generator import evaluate_short_answer
 
-
-def render_chat_window() -> Optional[str]:
+def render_chat_window(student_id: str):
     """
-    Render the chat input and placeholder assistant response.
-
-    Returns:
-        The latest user question, or None if no question was submitted.
+    Renders the chat interface and maintains a history of the conversation.
     """
-    question = st.chat_input("Ask a question about your course material")
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    if not question:
-        return None
+    # Display chat history
+    for msg_idx, message in enumerate(st.session_state.messages):
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+            
+            if message["role"] == "assistant":
+                if "sources" in message: render_sources(message["sources"])
+                if "coverage" in message: render_coverage_report(message["coverage"])
+                
+                if "questions" in message:
+                    with st.expander("📝 Practice & Assessment", expanded=False):
+                        mcqs = [q for q in message["questions"] if isinstance(q, dict)]
+                        short_as = [q for q in message["questions"] if isinstance(q, str)]
 
-    st.chat_message("user").write(question)
+                        if mcqs:
+                            st.subheader("Multiple Choice Questions")
+                            for i, q in enumerate(mcqs, 1):
+                                st.markdown(f"**Q{i}: {q['question']}**")
+                                for opt, text in q.get("options", {}).items():
+                                    st.write(f"{opt}: {text}")
+                                
+                                if msg_idx == len(st.session_state.messages) - 1:
+                                    user_choice = st.selectbox(f"Your choice for Q{i}", ["-", "A", "B", "C", "D"], key=f"msg_{msg_idx}_q_{i}")
+                                    
+                                    if user_choice != "-":
+                                        correct = q.get("correct_answer")
+                                        is_correct = (user_choice == correct)
+                                        
+                                        # TRIGGER MEMORY UPDATE (Only once per choice)
+                                        if f"recorded_{msg_idx}_q_{i}" not in st.session_state:
+                                            pipeline.memory.process_quiz_result(
+                                                student_id=student_id,
+                                                topic=message.get("query", "General"),
+                                                question=q['question'],
+                                                student_answer=user_choice,
+                                                correct_answer=correct,
+                                                is_correct=is_correct
+                                            )
+                                            st.session_state[f"recorded_{msg_idx}_q_{i}"] = True
 
-    with st.chat_message("assistant"):
-        st.write("Pipeline response will appear here once connected.")
+                                        if is_correct:
+                                            st.success(f"✅ **Correct!** Logic: {q.get('explanation')}")
+                                        else:
+                                            st.error(f"❌ **Incorrect.** The correct answer was {correct}. Logic: {q.get('explanation')}")
+                                st.divider()
 
-        render_sources()
-        render_coverage_report()
+                        if short_as:
+                            st.subheader("Short Answer Challenge")
+                            for i, q_text in enumerate(short_as, 1):
+                                st.markdown(f"**Challenge {i}: {q_text}**")
+                                if msg_idx == len(st.session_state.messages) - 1:
+                                    user_ans = st.text_area("Write your answer here:", key=f"short_ans_{msg_idx}_{i}")
+                                    if st.button(f"Submit Answer {i}", key=f"btn_{msg_idx}_{i}"):
+                                        with st.spinner("Evaluating..."):
+                                            feedback = evaluate_short_answer(q_text, user_ans)
+                                            st.info(f"👨‍🏫 **Tutor Feedback:** {feedback}")
+                                            # We could also wire short answers to debt if we wanted more strict tracking!
 
-        with st.expander("Self-check Questions"):
-            st.write("Generated questions will appear here.")
+    # Handle new input
+    if question := st.chat_input("Ask a question about your course material"):
+        with st.chat_message("user"): st.write(question)
+        st.session_state.messages.append({"role": "user", "content": question})
 
-    return question
+        with st.chat_message("assistant"):
+            with st.spinner("TutorMind is analyzing your request..."):
+                try:
+                    result = pipeline.run_pipeline(question, student_id=student_id, history=st.session_state.messages)
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": result["explanation"],
+                        "query": question, # Save query for memory tracking
+                        "sources": result["sources"],
+                        "coverage": result["coverage"],
+                        "questions": result.get("questions", [])
+                    }
+                    st.session_state.messages.append(assistant_msg)
+                    st.rerun() 
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
