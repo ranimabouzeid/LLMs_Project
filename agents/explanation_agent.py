@@ -22,9 +22,10 @@ class ExplanationAgent:
                              approved_chunks: List[Chunk], 
                              open_debts: List[DebtEntry] = [],
                              history: List[Dict[str, str]] = [],
+                             preferences: Dict[str, str] = {},
                              use_domain_adaptation: bool = True) -> str:
         """
-        Generates a deep explanation. Can toggle domain adaptation for ablation studies.
+        Generates a deep explanation. Respects student preferences and repairs debts.
         """
         # Select prompt based on configuration
         system_prompt = self.domain_prompt if (use_domain_adaptation and self.domain_prompt) else self.default_prompt
@@ -44,18 +45,28 @@ class ExplanationAgent:
                 history_text += f"{role}: {msg['content'][:500]}...\n"
             history_text += "\n"
 
-        # 4. Handle Prerequisite Repairs
-        repair_text = ""
-        if open_debts:
-            repair_text = "### 🛠️ Prerequisite Foundations\n"
-            repair_text += "Before we dive in, let's quickly clarify some concepts you struggled with recently:\n"
-            for debt in open_debts:
-                repair_text += f"- {debt.prerequisite_concept}: {debt.evidence}\n"
-            repair_text += "\n---\n\n"
+        # 4. Handle Preferences
+        pref_text = ""
+        if preferences:
+            pref_text = "STUDENT PREFERENCES:\n"
+            for k, v in preferences.items():
+                pref_text += f"- {k.replace('_', ' ').title()}: {v}\n"
+            pref_text += "\n"
 
-        # 5. Construct final prompt
+        # 5. Handle Prerequisite Repairs (Modified to ask for explanation)
+        repair_instruction = ""
+        if open_debts:
+            repair_instruction = "\n### 🛠️ PREREQUISITE REPAIR NEEDED\n"
+            repair_instruction += "The student is missing the following prerequisites. You MUST explain them briefly and intuitively BEFORE answering their main question:\n"
+            for debt in open_debts:
+                repair_instruction += f"- {debt.prerequisite_concept}: (Why they missed it: {debt.evidence})\n"
+            repair_instruction += "\n"
+
+        # 6. Construct final prompt
         full_user_msg = f"""
 {history_text}
+{pref_text}
+{repair_instruction}
 STUDENT QUESTION/RESPONSE: {query}
 
 ESSENTIAL KEY IDEAS TO COVER:
@@ -65,6 +76,8 @@ SOURCE MATERIAL (Use ONLY these facts):
 {context_text}
 
 INSTRUCTIONS:
+- If there are prerequisites listed above, explain them intuitively first in a 'Prerequisite Foundations' section.
+- Follow the student's preferences if provided.
 - If the student is answering a question you asked, evaluate their answer first.
 - If they are asking a new question, follow the 'DeepStudy Coach' structure: Analogy, Connection, Breakdown, The Trap, and Challenge.
 """
@@ -75,4 +88,4 @@ INSTRUCTIONS:
             json_mode=False 
         )
 
-        return repair_text + explanation
+        return explanation

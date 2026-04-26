@@ -13,6 +13,7 @@ from evaluation.llm_judge import evaluate_response
 
 async def run_ablation_study():
     print("🚀 [Evaluation] Starting Multi-Config Ablation Study...")
+    print("⚠️  QUOTA GUARD: 12s sleep between questions to stay under 5 RPM.")
     
     pipeline = TeachingPipeline()
     test_queries = [
@@ -35,6 +36,12 @@ async def run_ablation_study():
         print(f"\n--- Testing Configuration: {config_name} ---")
         
         for query in test_queries:
+            # QUOTA GUARD: Wait 12 seconds before every request
+            # This ensures we never exceed 5 RPM even with multi-agent calls
+            if all_results:
+                print("   ⏳ Respecting API quota (12s cooldown)...")
+                await asyncio.sleep(12)
+
             print(f"  Query: {query}")
             start_time = time.time()
             

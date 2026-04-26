@@ -6,33 +6,35 @@ DB_PATH = "data/student.db"
 
 def init_db():
     """
-    Initializes the master student database with all required tables.
+    Initializes and MIGRATES the master student database.
     """
-    # Ensure data directory exists
     Path("data").mkdir(exist_ok=True)
-    
-    print(f"🗄️ Initializing Master Student Database at {DB_PATH}...")
+    print(f"🗄️ Initializing/Migrating Master Student Database at {DB_PATH}...")
     
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. Concept Debt Ledger (CDL)
+    # 1. Create tables if they don't exist
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS concept_debt (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id TEXT NOT NULL,
         topic TEXT NOT NULL,
         prerequisite_concept TEXT NOT NULL,
-        severity INTEGER NOT NULL CHECK(severity BETWEEN 1 AND 5),
+        severity INTEGER NOT NULL,
         evidence TEXT,
-        status TEXT DEFAULT 'open' CHECK(status IN ('open','partial','repaired')),
+        status TEXT DEFAULT 'open',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(student_id, topic, prerequisite_concept)
     )
     """)
 
-    # 2. Weak Topic Tracker
+    # 2. MIGRATION: SQLite doesn't support easy ALTER TABLE for constraints.
+    # We will try to update any 0 values to 1 if the constraint is still there,
+    # OR we recreate the table if we really need to.
+    # For now, let's just ensure the code handles it gracefully.
+    
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS weak_topics (
         student_id TEXT NOT NULL,
@@ -44,7 +46,6 @@ def init_db():
     )
     """)
 
-    # 3. Preference Memory
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS preference_memory (
         student_id TEXT NOT NULL,
@@ -57,7 +58,6 @@ def init_db():
     )
     """)
 
-    # 4. Session History
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS session_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +71,57 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("✅ Database initialized successfully!")
+    print("✅ Database ready.")
+
+def force_fix_constraints():
+    """
+    Recreates the concept_debt table to ensure the 0-5 constraint is active.
+    """
+    if not os.path.exists(DB_PATH):
+        return
+        
+    print("🔧 Migrating concept_debt table to allow severity=0...")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        # 1. Backup old data
+        cursor.execute("SELECT * FROM concept_debt")
+        old_data = cursor.fetchall()
+        
+        # 2. Drop old table
+        cursor.execute("DROP TABLE concept_debt")
+        
+        # 3. Create new table with 0-5 constraint
+        cursor.execute("""
+        CREATE TABLE concept_debt (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            prerequisite_concept TEXT NOT NULL,
+            severity INTEGER NOT NULL CHECK(severity BETWEEN 0 AND 5),
+            evidence TEXT,
+            status TEXT DEFAULT 'open' CHECK(status IN ('open','partial','repaired')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(student_id, topic, prerequisite_concept)
+        )
+        """)
+        
+        # 4. Restore data (mapping columns)
+        for row in old_data:
+            cursor.execute("""
+                INSERT INTO concept_debt (id, student_id, topic, prerequisite_concept, severity, evidence, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, row)
+            
+        conn.commit()
+        print("✅ Migration successful!")
+    except Exception as e:
+        print(f"⚠️ Migration skipped or failed: {e}")
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     init_db()
+    force_fix_constraints()

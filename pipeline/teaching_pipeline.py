@@ -5,11 +5,12 @@ from pydantic import BaseModel
 from agents.decomposer import Decomposer
 from agents.retrieval_judge import RetrievalJudge
 from agents.explanation_agent import ExplanationAgent
-from agents.coverage_verifier import verify_coverage
-from agents.question_generator import generate_question_set
+from agents.quality_agent import QualityAgent # Consolidated Auditor
 from tools.embedder import ChromaEmbedder
 from memory.memory_manager import MemoryManager
 from memory.concept_debt_ledger import ConceptDebtLedger
+from memory.preference_memory import get_preferences
+from agents.debt_detector import filter_relevant_debts
 from pipeline.schemas import Chunk, KeyIdea, DebtEntry
 
 class AblationConfig(BaseModel):
@@ -21,12 +22,13 @@ class AblationConfig(BaseModel):
 
 class TeachingPipeline:
     """
-    The Orchestrator. Tied together with Asyncio for high performance.
+    The Orchestrator. Consolidates steps to reduce API quota consumption.
     """
     def __init__(self):
         self.decomposer = Decomposer()
         self.judge = RetrievalJudge(threshold=5.0)
         self.explainer = ExplanationAgent()
+        self.quality_agent = QualityAgent() # Replaces ECV and QuestionGen
         self.knowledge_store = ChromaEmbedder()
         self.memory = MemoryManager()
         self.cdl = ConceptDebtLedger()
@@ -37,17 +39,21 @@ class TeachingPipeline:
                            history: List[Dict[str, str]] = [],
                            config: Optional[AblationConfig] = None) -> Dict[str, Any]:
         """
-        Executes the full pedagogical flow asynchronously.
+        Executes the flow asynchronously with request consolidation.
         """
         if config is None:
             config = AblationConfig()
 
-        print(f"\n🚀 [Pipeline] Processing: '{query}' (Ablation: {config.dict()})")
+        print(f"\n🚀 [Pipeline] Processing: '{query}' (Quota Optimized)")
 
-        # STEP 1: Debt Check
+        # STEP 1: Context
         open_debts = []
+        preferences = {}
         if config.use_cdl:
-            open_debts = self.cdl.get_active_debts(student_id, query)
+            all_open_debts = self.cdl.get_active_debts(student_id, query)
+            open_debts = filter_relevant_debts(query, all_open_debts)
+            prefs_raw = get_preferences(student_id)
+            preferences = {p[0]: p[1] for p in prefs_raw}
 
         # STEP 2: Retrieval
         search_results = self.knowledge_store.search(query, k=8, filter={"student_id": student_id})
@@ -57,42 +63,35 @@ class TeachingPipeline:
             for doc in search_results
         ]
 
-        # --- PARALLEL BLOCK (Steps 3 & 4) ---
-        # We wrap these in threads since they are currently blocking LLM calls
-        loop = asyncio.get_event_loop()
-        
+        # STEP 3 & 4: Parallel Judging and Decomposition
         async def get_judged_chunks():
-            if config.use_tarj:
-                return self.judge.score_chunks(query, raw_chunks)
-            return raw_chunks # Skip filtering
+            return self.judge.score_chunks(query, raw_chunks) if config.use_tarj else raw_chunks
 
         async def get_key_ideas():
             return self.decomposer.decompose(query)
 
-        # Run both at the same time
-        approved_chunks, key_ideas = await asyncio.gather(
-            get_judged_chunks(),
-            get_key_ideas()
-        )
+        approved_chunks, key_ideas = await asyncio.gather(get_judged_chunks(), get_key_ideas())
 
-        # STEP 5: Generate Explanation
+        # STEP 5: Explanation
         explanation = self.explainer.generate_explanation(
-            query=query,
-            key_ideas=key_ideas,
-            approved_chunks=approved_chunks,
-            open_debts=open_debts,
-            history=history,
-            use_domain_adaptation=config.use_domain_adaptation # Added flag
+            query=query, key_ideas=key_ideas, approved_chunks=approved_chunks,
+            open_debts=open_debts, history=history, preferences=preferences,
+            use_domain_adaptation=config.use_domain_adaptation
         )
 
-        # STEP 6: ECV Coverage Check
-        report = None
-        if config.use_ecv:
-            report = verify_coverage(key_ideas, explanation)
+        # Mark explained debts as repaired
+        if config.use_cdl and open_debts:
+            for debt in open_debts:
+                self.cdl.mark_as_repaired(student_id, debt.prerequisite_concept)
 
-        # STEP 7: Question Generation
-        question_data = generate_question_set(query, [idea.name for idea in key_ideas])
-        questions = question_data.get("mcqs", []) + question_data.get("short_answer", [])
+        # STEP 6 & 7: Consolidated Audit and Question Generation (Saves 1 API Call)
+        report, questions = None, []
+        if config.use_ecv:
+            report, questions = self.quality_agent.perform_final_audit(query, explanation, key_ideas)
+        else:
+            # Fallback if ECV is ablated: generate questions only (Still needs an API call)
+            # To be truly ablated, we just return empty
+            pass
 
         # STEP 8: Update Memory
         self.memory.process_interaction(

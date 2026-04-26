@@ -1,122 +1,71 @@
 """
-Memory panel UI for TutorMind.
-
-Displays persistent student memory:
-- weak topics
-- saved preferences
-- recent session summaries
+Memory panel UI for TutorMind with manual preference overrides.
 """
 
 from typing import Any
-
 import streamlit as st
-
-from memory.preference_memory import get_preferences
+from memory.preference_memory import get_preferences, save_preference
 from memory.session_history import get_recent_sessions
 from memory.weak_topic_tracker import get_weak_topics
 
-
-def _format_empty_message(message: str) -> None:
-    """Render a consistent empty-state message."""
-    st.caption(message)
-
-
 def _render_weak_topics(student_id: str) -> None:
-    """Render weak topics for the selected student."""
-    st.subheader("Weak Topics")
-
+    st.subheader("📈 Knowledge Map")
     try:
         weak_topics = get_weak_topics(student_id)
-    except Exception as exc:
-        st.error(f"Could not load weak topics: {exc}")
-        return
-
-    if not weak_topics:
-        _format_empty_message("No weak topics recorded yet.")
-        return
-
-    for topic, difficulty, interactions, last_seen in weak_topics:
-        difficulty_value = float(difficulty)
-
-        st.markdown(
-            f"""
-            **{topic}**  
-            Difficulty: `{difficulty_value:.1f}/10`  
-            Interactions: `{interactions}`  
-            Last seen: `{last_seen}`
-            """
-        )
-
+        if not weak_topics:
+            st.caption("No weak topics recorded yet.")
+            return
+        for topic, diff, inter, last in weak_topics:
+            st.markdown(f"**{topic}** (Difficulty: `{diff:.1f}/10`)")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 def _render_preferences(student_id: str) -> None:
-    """Render stored student preferences."""
-    st.subheader("Preferences")
+    st.subheader("⚙️ Learning Settings")
+    
+    # 1. Manual Override Form
+    with st.form("pref_form"):
+        st.write("Customize your tutor's behavior:")
+        depth = st.selectbox("Explanation Depth", ["Balanced", "Concise (Just the facts)", "Detailed (Deep dive)"])
+        format_style = st.selectbox("Formatting", ["Mixed (Prose + Bullets)", "Bullet Points Only", "Academic Prose"])
+        
+        submitted = st.form_submit_button("Save Preferences")
+        if submitted:
+            save_preference(student_id, "explanation_depth", depth)
+            save_preference(student_id, "format_style", format_style)
+            st.success("Preferences updated!")
 
-    try:
-        preferences = get_preferences(student_id)
-    except Exception as exc:
-        st.error(f"Could not load preferences: {exc}")
-        return
-
-    if not preferences:
-        _format_empty_message("No learning preferences stored yet.")
-        return
-
-    for key, value, confidence in preferences:
-        confidence_value = float(confidence)
-
-        st.markdown(
-            f"""
-            **{key}**: `{value}`  
-            Confidence: `{confidence_value:.1f}`
-            """
-        )
-
+    # 2. Display Current
+    st.write("---")
+    st.write("**Active Preferences:**")
+    prefs = get_preferences(student_id)
+    if not prefs:
+        st.caption("No preferences stored yet.")
+    for key, val, conf in prefs:
+        st.markdown(f"- {key.replace('_', ' ').title()}: `{val}`")
 
 def _render_recent_sessions(student_id: str) -> None:
-    """Render recent session history."""
-    st.subheader("Recent Sessions")
-
+    st.subheader("🕒 Session History")
     try:
         sessions = get_recent_sessions(student_id)
-    except Exception as exc:
-        st.error(f"Could not load session history: {exc}")
-        return
-
-    if not sessions:
-        _format_empty_message("No previous sessions found.")
-        return
-
-    for topic, summary, created_at in sessions:
-        topic_label = topic if topic else "General"
-
-        st.markdown(
-            f"""
-            **{topic_label}**  
-            {summary}  
-            _{created_at}_
-            """
-        )
-
+        if not sessions:
+            st.caption("No sessions found.")
+            return
+        for topic, summary, date in sessions:
+            st.markdown(f"**{topic}**: {summary[:100]}... \n_{date}_")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 def render_memory_panel(student_id: str) -> None:
     """
-    Render the full student memory panel.
-
-    Args:
-        student_id: The active student identifier from the sidebar.
+    Render the full student memory panel. (Header removed for sidebar consistency)
     """
-    st.header("Memory")
-
     if not student_id.strip():
-        st.warning("Enter a student ID to load memory.")
         return
 
-    with st.expander("Weak Topics", expanded=False):
+    with st.expander("📊 Knowledge & Preferences", expanded=False):
         _render_weak_topics(student_id)
-
-    with st.expander("Preferences", expanded=False):
+        st.divider()
         _render_preferences(student_id)
-
-    with st.expander("Recent Sessions", expanded=False):
+        st.divider()
         _render_recent_sessions(student_id)

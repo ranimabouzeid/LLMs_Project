@@ -2,59 +2,26 @@ import sqlite3
 
 DB_PATH = "data/student.db"
 
-
-def update_topic(student_id, topic, struggled=False):
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT difficulty, interactions
-        FROM weak_topics
-        WHERE student_id = ? AND topic = ?
-    """, (student_id, topic))
-
-    row = cur.fetchone()
-
-    if row is None:
-        difficulty = 6.0 if struggled else 4.5
-        interactions = 1
-
+def update_topic_score(student_id, topic, impact):
+    with sqlite3.connect(DB_PATH, timeout=30.0) as conn:
+        cur = conn.cursor()
         cur.execute("""
             INSERT INTO weak_topics (student_id, topic, difficulty, interactions)
-            VALUES (?, ?, ?, ?)
-        """, (student_id, topic, difficulty, interactions))
-    else:
-        difficulty, interactions = row
-        interactions += 1
+            VALUES (?, ?, ?, 1)
+            ON CONFLICT(student_id, topic) DO UPDATE SET
+                difficulty = MAX(0, MIN(10, difficulty + ?)),
+                interactions = interactions + 1,
+                last_seen = CURRENT_TIMESTAMP
+        """, (student_id, topic, impact, impact))
+        conn.commit()
 
-        if struggled:
-            difficulty = min(10.0, difficulty + 1.0)
-        else:
-            difficulty = max(0.0, difficulty - 0.5)
-
+def get_weak_topics(student_id):
+    with sqlite3.connect(DB_PATH, timeout=30.0) as conn:
+        cur = conn.cursor()
         cur.execute("""
-            UPDATE weak_topics
-            SET difficulty = ?, interactions = ?, last_seen = CURRENT_TIMESTAMP
-            WHERE student_id = ? AND topic = ?
-        """, (difficulty, interactions, student_id, topic))
-
-    conn.commit()
-    conn.close()
-
-
-def get_weak_topics(student_id, limit=5):
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT topic, difficulty, interactions, last_seen
-        FROM weak_topics
-        WHERE student_id = ?
-        ORDER BY difficulty DESC
-        LIMIT ?
-    """, (student_id, limit))
-
-    topics = cur.fetchall()
-    conn.close()
-
-    return topics
+            SELECT topic, difficulty, interactions, last_seen
+            FROM weak_topics
+            WHERE student_id = ?
+            ORDER BY difficulty DESC
+        """, (student_id,))
+        return cur.fetchall()

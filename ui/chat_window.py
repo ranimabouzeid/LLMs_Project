@@ -1,8 +1,9 @@
 """
-Chat window UI for TutorMind with Async support and High-Performance MCQs.
+Chat window UI for TutorMind with Async support, High-Performance MCQs, and Background Memory Updates.
 """
 
 import asyncio
+import threading
 from typing import Optional
 import streamlit as st
 from ui.coverage_display import render_coverage_report
@@ -45,24 +46,33 @@ def render_chat_window(student_id: str):
                                         correct = q.get("correct_answer")
                                         is_correct = (user_choice == correct)
                                         
-                                        # Display result INSTANTLY
+                                        # 1. DISPLAY RESULT INSTANTLY
                                         if is_correct:
                                             st.success(f"✅ **Correct!** Logic: {q.get('explanation')}")
                                         else:
                                             st.error(f"❌ **Incorrect.** The correct answer was {correct}. Logic: {q.get('explanation')}")
 
-                                        # Update memory in the background
+                                        # 2. UPDATE MEMORY IN BACKGROUND (No UI freeze)
                                         if f"recorded_{msg_idx}_q_{i}" not in st.session_state:
-                                            pipeline.memory.process_quiz_result(
-                                                student_id=student_id,
-                                                topic=message.get("query", "General"),
-                                                question=q['question'],
-                                                student_answer=user_choice,
-                                                correct_answer=correct,
-                                                is_correct=is_correct
-                                            )
+                                            threading.Thread(
+                                                target=pipeline.memory.process_quiz_result,
+                                                args=(student_id, message.get("query", "General"), q['question'], user_choice, correct, is_correct),
+                                                daemon=True
+                                            ).start()
                                             st.session_state[f"recorded_{msg_idx}_q_{i}"] = True
+                                            st.caption("🔍 Background: Knowledge map updated.")
                                 st.divider()
+
+                        if short_as:
+                            st.subheader("Short Answer Challenge")
+                            for i, q_text in enumerate(short_as, 1):
+                                st.markdown(f"**Challenge {i}: {q_text}**")
+                                if msg_idx == len(st.session_state.messages) - 1:
+                                    user_ans = st.text_area("Write your answer here:", key=f"short_ans_{msg_idx}_{i}")
+                                    if st.button(f"Submit Answer {i}", key=f"btn_{msg_idx}_{i}"):
+                                        with st.spinner("Evaluating..."):
+                                            feedback = evaluate_short_answer(q_text, user_ans)
+                                            st.info(f"👨‍🏫 **Tutor Feedback:** {feedback}")
 
     # Handle new input
     if question := st.chat_input("Ask a question about your course material"):
@@ -72,7 +82,6 @@ def render_chat_window(student_id: str):
         with st.chat_message("assistant"):
             with st.spinner("TutorMind is thinking (Parallel Mode)..."):
                 try:
-                    # Run the pipeline ASYNC
                     result = asyncio.run(pipeline.run_pipeline(
                         question, 
                         student_id=student_id, 

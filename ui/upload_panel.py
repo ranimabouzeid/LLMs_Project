@@ -25,38 +25,38 @@ def _save_uploaded_file(uploaded_file) -> Path:
 
 def render_upload_panel(student_id: str) -> None:
     """
-    Render the upload panel and allow immediate indexing.
+    Render the upload panel as an expander.
     """
-    st.header("Upload Material")
+    with st.expander("📂 Upload Course Material", expanded=False):
+        uploaded_files = st.file_uploader(
+            "PDF, PPTX, or DOCX",
+            type=list(ALLOWED_EXTENSIONS),
+            accept_multiple_files=True,
+            key="sidebar_uploader"
+        )
 
-    uploaded_files = st.file_uploader(
-        "Upload PDF, PPTX, or DOCX",
-        type=list(ALLOWED_EXTENSIONS),
-        accept_multiple_files=True,
-    )
+        if uploaded_files:
+            if st.button("Index Documents", key="index_btn"):
+                with st.spinner("Indexing..."):
+                    all_chunks = []
+                    for uploaded_file in uploaded_files:
+                        try:
+                            file_path = _save_uploaded_file(uploaded_file)
+                            
+                            # Load and tag with student_id
+                            pages = load_document(str(file_path))
+                            for page in pages:
+                                page["student_id"] = student_id
+                            
+                            # Create semantic chunks
+                            chunks = chunk_loaded_pages(pages)
+                            all_chunks.extend(chunks)
+                        except Exception as e:
+                            st.error(f"Error processing {uploaded_file.name}: {e}")
 
-    if uploaded_files:
-        if st.button("Index Documents"):
-            with st.spinner("Indexing your documents..."):
-                all_chunks = []
-                for uploaded_file in uploaded_files:
-                    try:
-                        file_path = _save_uploaded_file(uploaded_file)
-                        
-                        # Load and tag with student_id
-                        pages = load_document(str(file_path))
-                        for page in pages:
-                            page["student_id"] = student_id
-                        
-                        # Create semantic chunks
-                        chunks = chunk_loaded_pages(pages)
-                        all_chunks.extend(chunks)
-                    except Exception as e:
-                        st.error(f"Error processing {uploaded_file.name}: {e}")
-
-                if all_chunks:
-                    db = ChromaEmbedder()
-                    db.add_chunks(all_chunks)
-                    st.success(f"Successfully indexed {len(all_chunks)} chunks for {student_id}!")
-                else:
-                    st.warning("No text extracted from documents.")
+                    if all_chunks:
+                        db = ChromaEmbedder()
+                        db.add_chunks(all_chunks)
+                        st.success(f"Indexed {len(all_chunks)} chunks!")
+                    else:
+                        st.warning("No text extracted.")
