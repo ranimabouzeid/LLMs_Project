@@ -1,3 +1,4 @@
+import asyncio
 import time
 import pandas as pd
 import os
@@ -7,11 +8,11 @@ from pathlib import Path
 # Add root to path for imports
 sys.path.append(os.getcwd())
 
-from pipeline.teaching_pipeline import TeachingPipeline
+from pipeline.teaching_pipeline import TeachingPipeline, AblationConfig
 from evaluation.llm_judge import evaluate_response
 
-def run_ablation_study():
-    print("🚀 Starting Ablation Study...")
+async def run_ablation_study():
+    print("🚀 [Evaluation] Starting Multi-Config Ablation Study...")
     
     pipeline = TeachingPipeline()
     test_queries = [
@@ -20,41 +21,61 @@ def run_ablation_study():
         "Explain backpropagation."
     ]
     
-    results = []
+    # Define the 4 configurations from requirements.md
+    configs = {
+        "A: Baseline": AblationConfig(use_tarj=False, use_ecv=False, use_cdl=False, use_domain_adaptation=False),
+        "B: +TARJ+ECV": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=False, use_domain_adaptation=False),
+        "C: +CDL": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=True, use_domain_adaptation=False),
+        "D: Full TutorMind": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=True, use_domain_adaptation=True)
+    }
     
-    for query in test_queries:
-        print(f"\nTesting query: {query}")
-        start_time = time.time()
-        
-        # Run Full TutorMind Config
-        response = pipeline.run_pipeline(query, student_id="eval_student")
-        
-        latency = time.time() - start_time
-        
-        score = evaluate_response(query, response["explanation"])
-        
-        coverage = response["coverage"]
-        total_ideas = len(coverage.covered_ideas) + len(coverage.missing_ideas)
-        coverage_rate = len(coverage.covered_ideas) / max(1, total_ideas)
-        
-        results.append({
-            "Query": query,
-            "Latency (s)": round(latency, 2),
-            "Judge Score (1-10)": score,
-            "Coverage Rate": round(coverage_rate, 2),
-            "Key Ideas": len(response["key_ideas"])
-        })
-        
-    df = pd.DataFrame(results)
-    print("\n" + "="*50)
-    print("📊 ABLATION STUDY RESULTS:")
-    print("="*50)
-    print(df.to_string(index=False))
+    all_results = []
     
-    # Save to CSV
+    for config_name, config in configs.items():
+        print(f"\n--- Testing Configuration: {config_name} ---")
+        
+        for query in test_queries:
+            print(f"  Query: {query}")
+            start_time = time.time()
+            
+            # Run the specific async config
+            response = await pipeline.run_pipeline(query, student_id="eval_user", config=config)
+            
+            latency = time.time() - start_time
+            score = evaluate_response(query, response["explanation"])
+            
+            # Calculate Coverage %
+            cov_rate = 0.0
+            if response["coverage"]:
+                report = response["coverage"]
+                total = len(report.covered_ideas) + len(report.missing_ideas)
+                cov_rate = len(report.covered_ideas) / max(1, total)
+
+            all_results.append({
+                "Config": config_name,
+                "Query": query,
+                "Judge Score": score,
+                "Coverage %": round(cov_rate * 100, 1),
+                "Latency (s)": round(latency, 2)
+            })
+
+    # Summary Table
+    df = pd.DataFrame(all_results)
+    summary = df.groupby("Config").agg({
+        "Judge Score": "mean",
+        "Coverage %": "mean",
+        "Latency (s)": "mean"
+    }).reset_index()
+
+    print("\n" + "="*60)
+    print("📊 FINAL ABLATION SUMMARY")
+    print("="*60)
+    print(summary.to_string(index=False))
+    
+    # Save results
     os.makedirs("evaluation/results", exist_ok=True)
-    df.to_csv("evaluation/results/ablation_results.csv", index=False)
-    print("\n✅ Results saved to evaluation/results/ablation_results.csv")
+    summary.to_csv("evaluation/results/final_ablation_summary.csv", index=False)
+    print(f"\n✅ Results saved to evaluation/results/final_ablation_summary.csv")
 
 if __name__ == "__main__":
-    run_ablation_study()
+    asyncio.run(run_ablation_study())

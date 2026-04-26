@@ -1,7 +1,8 @@
 """
-Chat window UI for TutorMind with persistent conversation history and interactive, detailed MCQs/Short Answers (Wired to Memory).
+Chat window UI for TutorMind with Async support and High-Performance MCQs.
 """
 
+import asyncio
 from typing import Optional
 import streamlit as st
 from ui.coverage_display import render_coverage_report
@@ -44,7 +45,13 @@ def render_chat_window(student_id: str):
                                         correct = q.get("correct_answer")
                                         is_correct = (user_choice == correct)
                                         
-                                        # TRIGGER MEMORY UPDATE (Only once per choice)
+                                        # Display result INSTANTLY
+                                        if is_correct:
+                                            st.success(f"✅ **Correct!** Logic: {q.get('explanation')}")
+                                        else:
+                                            st.error(f"❌ **Incorrect.** The correct answer was {correct}. Logic: {q.get('explanation')}")
+
+                                        # Update memory in the background
                                         if f"recorded_{msg_idx}_q_{i}" not in st.session_state:
                                             pipeline.memory.process_quiz_result(
                                                 student_id=student_id,
@@ -55,24 +62,7 @@ def render_chat_window(student_id: str):
                                                 is_correct=is_correct
                                             )
                                             st.session_state[f"recorded_{msg_idx}_q_{i}"] = True
-
-                                        if is_correct:
-                                            st.success(f"✅ **Correct!** Logic: {q.get('explanation')}")
-                                        else:
-                                            st.error(f"❌ **Incorrect.** The correct answer was {correct}. Logic: {q.get('explanation')}")
                                 st.divider()
-
-                        if short_as:
-                            st.subheader("Short Answer Challenge")
-                            for i, q_text in enumerate(short_as, 1):
-                                st.markdown(f"**Challenge {i}: {q_text}**")
-                                if msg_idx == len(st.session_state.messages) - 1:
-                                    user_ans = st.text_area("Write your answer here:", key=f"short_ans_{msg_idx}_{i}")
-                                    if st.button(f"Submit Answer {i}", key=f"btn_{msg_idx}_{i}"):
-                                        with st.spinner("Evaluating..."):
-                                            feedback = evaluate_short_answer(q_text, user_ans)
-                                            st.info(f"👨‍🏫 **Tutor Feedback:** {feedback}")
-                                            # We could also wire short answers to debt if we wanted more strict tracking!
 
     # Handle new input
     if question := st.chat_input("Ask a question about your course material"):
@@ -80,13 +70,19 @@ def render_chat_window(student_id: str):
         st.session_state.messages.append({"role": "user", "content": question})
 
         with st.chat_message("assistant"):
-            with st.spinner("TutorMind is analyzing your request..."):
+            with st.spinner("TutorMind is thinking (Parallel Mode)..."):
                 try:
-                    result = pipeline.run_pipeline(question, student_id=student_id, history=st.session_state.messages)
+                    # Run the pipeline ASYNC
+                    result = asyncio.run(pipeline.run_pipeline(
+                        question, 
+                        student_id=student_id, 
+                        history=st.session_state.messages
+                    ))
+                    
                     assistant_msg = {
                         "role": "assistant",
                         "content": result["explanation"],
-                        "query": question, # Save query for memory tracking
+                        "query": question,
                         "sources": result["sources"],
                         "coverage": result["coverage"],
                         "questions": result.get("questions", [])

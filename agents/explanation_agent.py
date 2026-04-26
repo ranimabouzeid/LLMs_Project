@@ -9,21 +9,25 @@ class ExplanationAgent:
     The main agent responsible for generating the structured pedagogical response.
     """
     def __init__(self):
+        self.default_prompt = EXPLANATION_SYSTEM_PROMPT
+        self.domain_prompt = ""
+        
         prompt_path = Path("pipeline/domain_prompt.txt")
         if prompt_path.exists():
-            self.system_prompt = prompt_path.read_text(encoding="utf-8")
-        else:
-            self.system_prompt = EXPLANATION_SYSTEM_PROMPT
+            self.domain_prompt = prompt_path.read_text(encoding="utf-8")
 
     def generate_explanation(self, 
                              query: str, 
                              key_ideas: List[KeyIdea], 
                              approved_chunks: List[Chunk], 
                              open_debts: List[DebtEntry] = [],
-                             history: List[Dict[str, str]] = []) -> str:
+                             history: List[Dict[str, str]] = [],
+                             use_domain_adaptation: bool = True) -> str:
         """
-        Generates a deep explanation using chunks, history, and addressing key ideas.
+        Generates a deep explanation. Can toggle domain adaptation for ablation studies.
         """
+        # Select prompt based on configuration
+        system_prompt = self.domain_prompt if (use_domain_adaptation and self.domain_prompt) else self.default_prompt
         
         # 1. Build the context from retrieved chunks
         context_text = "\n\n".join([f"[Source: {c.metadata.get('source_file', 'Unknown')}] {c.text}" for c in approved_chunks])
@@ -31,11 +35,11 @@ class ExplanationAgent:
         # 2. Build the list of must-cover ideas
         ideas_text = "\n".join([f"- {i.name}: {i.description}" for i in key_ideas])
         
-        # 3. Format History for the AI
+        # 3. Format History
         history_text = ""
         if history:
             history_text = "CONVERSATION HISTORY:\n"
-            for msg in history[-5:]: # Last 5 messages for context
+            for msg in history[-5:]:
                 role = "Student" if msg["role"] == "user" else "TutorMind"
                 history_text += f"{role}: {msg['content'][:500]}...\n"
             history_text += "\n"
@@ -66,7 +70,7 @@ INSTRUCTIONS:
 """
         
         explanation = llm_client.chat(
-            system_prompt=self.system_prompt,
+            system_prompt=system_prompt,
             user_message=full_user_msg,
             json_mode=False 
         )

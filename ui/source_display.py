@@ -1,52 +1,48 @@
 """
 Source display UI for TutorMind.
-
 Renders retrieved document chunks and their optional retrieval judge scores.
 """
 
 from typing import Any, Iterable, Optional
-
 import streamlit as st
 
-
-def _get_value(source: Any, key: str, default: Any = None) -> Any:
+def _get_value(source: Any, key_list: list, default: Any = None) -> Any:
     """
-    Read a value from either a dictionary-like source or an object attribute.
-    This keeps the UI compatible with future Chunk dataclasses.
+    Tries to find a value from a list of possible keys in both dict and object formats.
     """
-    if isinstance(source, dict):
-        return source.get(key, default)
-
-    return getattr(source, key, default)
-
+    for key in key_list:
+        if isinstance(source, dict):
+            val = source.get(key)
+            if val is not None: return val
+        else:
+            val = getattr(source, key, None)
+            if val is not None: return val
+    return default
 
 def render_sources(sources: Optional[Iterable[Any]] = None) -> None:
     """
     Render retrieved sources in an expandable section.
-
-    Args:
-        sources: Optional iterable of source chunks. Each item can be a dict
-                 or an object with fields such as text, source, page, and tarj_score.
     """
     with st.expander("Sources", expanded=False):
         if not sources:
-            st.caption("No retrieved sources yet.")
+            st.caption("No retrieved sources yet (or quality threshold not met).")
             return
 
         for index, source in enumerate(sources, start=1):
-            source_name = _get_value(source, "source", "Unknown source")
-            page = _get_value(source, "page")
-            score = _get_value(source, "tarj_score")
-            text = _get_value(source, "text", "")
+            # Check all possible naming conventions to avoid "Unknown Source"
+            source_name = _get_value(source, ["source_file", "source", "filename"], "Unknown source")
+            page = _get_value(source, ["page_number", "page"])
+            score = _get_value(source, ["pedagogical_score", "tarj_score", "score"])
+            text = _get_value(source, ["text", "page_content", "content"], "")
 
             title = f"Source {index}: {source_name}"
-            if page is not None:
+            if page is not None and str(page) != "":
                 title += f" — page {page}"
 
             st.markdown(f"**{title}**")
 
             if score is not None:
-                st.caption(f"TARJ score: {float(score):.1f}/10")
+                st.caption(f"Pedagogical Quality: {float(score):.1f}/10")
 
             if text:
                 st.write(text)

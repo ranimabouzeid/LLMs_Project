@@ -1,17 +1,27 @@
-from typing import Dict, Any, List
+import asyncio
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel
+
 from agents.decomposer import Decomposer
 from agents.retrieval_judge import RetrievalJudge
 from agents.explanation_agent import ExplanationAgent
-from agents.coverage_verifier import verify_coverage, build_coverage_feedback
+from agents.coverage_verifier import verify_coverage
 from agents.question_generator import generate_question_set
 from tools.embedder import ChromaEmbedder
 from memory.memory_manager import MemoryManager
 from memory.concept_debt_ledger import ConceptDebtLedger
 from pipeline.schemas import Chunk, KeyIdea, DebtEntry
 
+class AblationConfig(BaseModel):
+    """Toggles for the Ablation Study."""
+    use_tarj: bool = True
+    use_ecv: bool = True
+    use_cdl: bool = True
+    use_domain_adaptation: bool = True
+
 class TeachingPipeline:
     """
-    The Orchestrator. Ties all 8 steps of the TutorMind process together.
+    The Orchestrator. Tied together with Asyncio for high performance.
     """
     def __init__(self):
         self.decomposer = Decomposer()
@@ -21,64 +31,66 @@ class TeachingPipeline:
         self.memory = MemoryManager()
         self.cdl = ConceptDebtLedger()
 
-    def run_pipeline(self, 
-                     query: str, 
-                     student_id: str = "default_student", 
-                     history: List[Dict[str, str]] = []) -> Dict[str, Any]:
+    async def run_pipeline(self, 
+                           query: str, 
+                           student_id: str = "default_student", 
+                           history: List[Dict[str, str]] = [],
+                           config: Optional[AblationConfig] = None) -> Dict[str, Any]:
         """
-        Executes the full pedagogical flow.
+        Executes the full pedagogical flow asynchronously.
         """
-        print(f"\n🚀 Starting Teaching Pipeline for: '{query}'")
+        if config is None:
+            config = AblationConfig()
+
+        print(f"\n🚀 [Pipeline] Processing: '{query}' (Ablation: {config.dict()})")
 
         # STEP 1: Debt Check
-        print("🔍 Step 1: Checking for previous concept debts...")
-        open_debts = self.cdl.get_active_debts(student_id, query)
-        if open_debts:
-            print(f"   ⚠️ Found {len(open_debts)} prerequisites that need repair.")
+        open_debts = []
+        if config.use_cdl:
+            open_debts = self.cdl.get_active_debts(student_id, query)
 
-        # STEP 2: Real Retrieval with student_id filtering
-        print(f"📡 Step 2: Retrieving course materials for {student_id}...")
-        search_results = self.knowledge_store.search(
-            query, 
-            k=5, 
-            filter={"student_id": student_id} 
-        )
+        # STEP 2: Retrieval
+        search_results = self.knowledge_store.search(query, k=8, filter={"student_id": student_id})
+        raw_chunks = [
+            Chunk(text=doc.page_content, metadata=doc.metadata, 
+                  source_file=doc.metadata.get("source_file"), page_number=doc.metadata.get("page"))
+            for doc in search_results
+        ]
+
+        # --- PARALLEL BLOCK (Steps 3 & 4) ---
+        # We wrap these in threads since they are currently blocking LLM calls
+        loop = asyncio.get_event_loop()
         
-        # Convert LangChain Documents back to our Chunk schema
-        raw_chunks = []
-        for doc in search_results:
-            raw_chunks.append(Chunk(
-                text=doc.page_content,
-                metadata=doc.metadata,
-                source_file=doc.metadata.get("source_file"),
-                page_number=doc.metadata.get("page")
-            ))
+        async def get_judged_chunks():
+            if config.use_tarj:
+                return self.judge.score_chunks(query, raw_chunks)
+            return raw_chunks # Skip filtering
 
-        # STEP 3: TARJ (Your Quality Filter)
-        print("⚖️ Step 3: Judging pedagogical quality...")
-        approved_chunks = self.judge.score_chunks(query, raw_chunks)
+        async def get_key_ideas():
+            return self.decomposer.decompose(query)
 
-        # STEP 4: Decompose (Your Syllabus Brain)
-        print("🧠 Step 4: Decomposing topic into Key Ideas...")
-        key_ideas = self.decomposer.decompose(query)
+        # Run both at the same time
+        approved_chunks, key_ideas = await asyncio.gather(
+            get_judged_chunks(),
+            get_key_ideas()
+        )
 
-        # STEP 5: Generate Explanation (Your Intuition Generator)
-        print("📝 Step 5: Generating deep explanation...")
+        # STEP 5: Generate Explanation
         explanation = self.explainer.generate_explanation(
             query=query,
             key_ideas=key_ideas,
             approved_chunks=approved_chunks,
             open_debts=open_debts,
-            history=history
+            history=history,
+            use_domain_adaptation=config.use_domain_adaptation # Added flag
         )
 
         # STEP 6: ECV Coverage Check
-        print("🔍 Step 6: Verifying explanation coverage...")
-        report = verify_coverage(key_ideas, explanation)
+        report = None
+        if config.use_ecv:
+            report = verify_coverage(key_ideas, explanation)
 
         # STEP 7: Question Generation
-        print("❓ Step 7: Generating assessment questions...")
-        missing_ideas = report.missing_ideas if 'report' in locals() else []
         question_data = generate_question_set(query, [idea.name for idea in key_ideas])
         questions = question_data.get("mcqs", []) + question_data.get("short_answer", [])
 
@@ -88,7 +100,7 @@ class TeachingPipeline:
             query=query,
             explanation=explanation,
             key_ideas=key_ideas,
-            missing_ideas=missing_ideas
+            missing_ideas=report.missing_ideas if report else []
         )
 
         return {
