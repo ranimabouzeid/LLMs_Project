@@ -28,15 +28,16 @@ def render_upload_panel(student_id: str) -> None:
     Render the upload panel as an expander.
     """
     with st.expander("📂 Upload Course Material", expanded=False):
+        # We use a student-specific key to force a reset when switching students
         uploaded_files = st.file_uploader(
             "PDF, PPTX, or DOCX",
             type=list(ALLOWED_EXTENSIONS),
             accept_multiple_files=True,
-            key="sidebar_uploader"
+            key=f"uploader_{student_id}"
         )
 
         if uploaded_files:
-            if st.button("Index Documents", key="index_btn"):
+            if st.button("Index Documents", key=f"index_btn_{student_id}"):
                 with st.spinner("Indexing..."):
                     all_chunks = []
                     for uploaded_file in uploaded_files:

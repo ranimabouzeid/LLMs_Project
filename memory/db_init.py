@@ -14,7 +14,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. Create tables if they don't exist
+    # 1. Concept Debt Ledger (CDL)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS concept_debt (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,11 +30,7 @@ def init_db():
     )
     """)
 
-    # 2. MIGRATION: SQLite doesn't support easy ALTER TABLE for constraints.
-    # We will try to update any 0 values to 1 if the constraint is still there,
-    # OR we recreate the table if we really need to.
-    # For now, let's just ensure the code handles it gracefully.
-    
+    # 2. Weak Topic Tracker
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS weak_topics (
         student_id TEXT NOT NULL,
@@ -46,6 +42,7 @@ def init_db():
     )
     """)
 
+    # 3. Preference Memory
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS preference_memory (
         student_id TEXT NOT NULL,
@@ -58,6 +55,7 @@ def init_db():
     )
     """)
 
+    # 4. Session History
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS session_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,6 +64,16 @@ def init_db():
         query TEXT NOT NULL,
         summary TEXT,
         key_ideas_covered TEXT
+    )
+    """)
+
+    # 5. Knowledge Cache
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS knowledge_cache (
+        query_hash TEXT PRIMARY KEY,
+        key_ideas_json TEXT,
+        approved_chunks_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
     """)
 

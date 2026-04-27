@@ -25,6 +25,7 @@ class VertexEmbeddingFunction:
         self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
         self.location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
+
         if not self.project_id:
             raise ValueError("GOOGLE_CLOUD_PROJECT is missing in .env")
 

@@ -13,15 +13,24 @@ from ui.memory_panel import render_memory_panel
 
 st.set_page_config(page_title="TutorMind", layout="wide")
 
-init_db()
-
 st.title("TutorMind")
 st.caption("Teaching-aware LLM tutor with RAG and student memory")
 
 with st.sidebar:
     st.header("Student")
     student_id = st.text_input("Student ID", value="student_001")
+
+    # STUDENT ISOLATION LOGIC
+    if "active_student" not in st.session_state:
+        st.session_state.active_student = student_id
     
+    if st.session_state.active_student != student_id:
+        # Student changed! Clear everything to prevent data leakage
+        st.session_state.messages = []
+        st.session_state.active_student = student_id
+        st.info(f"🔄 Switched to profile: {student_id}. History cleared.")
+        st.rerun()
+
     if st.button("Clear Chat History"):
         st.session_state.messages = []
         st.rerun()
