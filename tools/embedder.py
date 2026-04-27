@@ -34,7 +34,7 @@ class VertexEmbeddingFunction:
             location=self.location,
         )
 
-        self.model_name = "text-embedding-005"
+        self.model_name = "gemini-embedding-001"
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         embeddings = []
