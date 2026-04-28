@@ -25,10 +25,12 @@ with st.sidebar:
         st.session_state.active_student = student_id
     
     if st.session_state.active_student != student_id:
-        # Student changed! Clear everything to prevent data leakage
-        st.session_state.messages = []
+        # FULL RESET: Clear every key in session state to prevent "Ghosting"
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        
         st.session_state.active_student = student_id
-        st.info(f"🔄 Switched to profile: {student_id}. History cleared.")
+        st.info(f"🔄 Switched to profile: {student_id}. Session hard-reset.")
         st.rerun()
 
     if st.button("Clear Chat History"):
