@@ -14,6 +14,7 @@ from evaluation.llm_judge import evaluate_response
 async def run_ablation_study():
     print("🚀 [Evaluation] Starting Multi-Config Ablation Study...")
     print("⚠️  QUOTA GUARD: 12s sleep between questions to stay under 5 RPM.")
+    print("❄️  CACHE DISABLED: Measuring raw cold-start performance for report accuracy.")
     
     pipeline = TeachingPipeline()
     test_queries = [
@@ -22,12 +23,12 @@ async def run_ablation_study():
         "Explain backpropagation."
     ]
     
-    # Define the 4 configurations from requirements.md
+    # Define the 4 configurations (Force use_cache=False for all)
     configs = {
-        "A: Baseline": AblationConfig(use_tarj=False, use_ecv=False, use_cdl=False, use_domain_adaptation=False),
-        "B: +TARJ+ECV": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=False, use_domain_adaptation=False),
-        "C: +CDL": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=True, use_domain_adaptation=False),
-        "D: Full TutorMind": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=True, use_domain_adaptation=True)
+        "A: Baseline": AblationConfig(use_tarj=False, use_ecv=False, use_cdl=False, use_domain_adaptation=False, use_cache=False),
+        "B: +TARJ+ECV": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=False, use_domain_adaptation=False, use_cache=False),
+        "C: +CDL": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=True, use_domain_adaptation=False, use_cache=False),
+        "D: Full TutorMind": AblationConfig(use_tarj=True, use_ecv=True, use_cdl=True, use_domain_adaptation=True, use_cache=False)
     }
     
     all_results = []
@@ -36,8 +37,7 @@ async def run_ablation_study():
         print(f"\n--- Testing Configuration: {config_name} ---")
         
         for query in test_queries:
-            # QUOTA GUARD: Wait 12 seconds before every request
-            # This ensures we never exceed 5 RPM even with multi-agent calls
+            # QUOTA GUARD
             if all_results:
                 print("   ⏳ Respecting API quota (12s cooldown)...")
                 await asyncio.sleep(12)
@@ -45,7 +45,6 @@ async def run_ablation_study():
             print(f"  Query: {query}")
             start_time = time.time()
             
-            # Run the specific async config
             response = await pipeline.run_pipeline(query, student_id="eval_user", config=config)
             
             latency = time.time() - start_time
@@ -53,10 +52,14 @@ async def run_ablation_study():
             
             # Calculate Coverage %
             cov_rate = 0.0
-            if response["coverage"]:
-                report = response["coverage"]
+            if config.use_ecv:
+                # We need to perform the audit manually here because pipeline runs it in background
+                report, _ = pipeline.quality_agent.perform_final_audit(query, response["explanation"], response["key_ideas"])
                 total = len(report.covered_ideas) + len(report.missing_ideas)
-                cov_rate = len(report.covered_ideas) / max(1, total)
+                cov_rate = len(report.covered_ideas) / max(1, total) if total > 0 else 1.0
+            else:
+                # Baseline doesn't use key ideas, so coverage is technically N/A (set to 0)
+                cov_rate = 0.0
 
             all_results.append({
                 "Config": config_name,
@@ -75,11 +78,10 @@ async def run_ablation_study():
     }).reset_index()
 
     print("\n" + "="*60)
-    print("📊 FINAL ABLATION SUMMARY")
+    print("📊 FINAL ABLATION SUMMARY (Scientific Mode)")
     print("="*60)
     print(summary.to_string(index=False))
     
-    # Save results
     os.makedirs("evaluation/results", exist_ok=True)
     summary.to_csv("evaluation/results/final_ablation_summary.csv", index=False)
     print(f"\n✅ Results saved to evaluation/results/final_ablation_summary.csv")

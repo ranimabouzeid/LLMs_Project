@@ -22,6 +22,7 @@ class AblationConfig(BaseModel):
     use_ecv: bool = True
     use_cdl: bool = True
     use_domain_adaptation: bool = True
+    use_cache: bool = True # Added cache toggle
 
 class TeachingPipeline:
     def __init__(self):
@@ -71,8 +72,9 @@ class TeachingPipeline:
         prefs_raw = get_preferences(student_id)
         preferences = {p[0]: p[1] for p in prefs_raw}
 
-        # 2. CACHE CHECK
-        cached_result = self.cache.get(query)
+        # 2. CACHE CHECK (Respect the toggle)
+        cached_result = self.cache.get(query) if config.use_cache else None
+        
         if cached_result:
             key_ideas, approved_chunks = cached_result
         else:
