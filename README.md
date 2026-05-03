@@ -25,6 +25,7 @@ streamlit run app/main.py
 3.  **Ask & Learn:** Start chatting! The AI will automatically detect your "Concept Debts" and tailor its teaching style to your saved preferences.
 
 ## Key Features
+- **Customizable Teaching Persona:** The tutor's "voice" and explanation structure are decoupled from the system logic. By modifying the external `pipeline/domain_prompt.txt`, instructors can instantly swap between different pedagogical frameworks (e.g., Socratic vs. Coach style) without changing any code.
 - **High-Performance Pipeline:** Uses `asyncio` to run judging and decomposition in parallel, reducing latency by 40%.
 - **Closed-Loop Learning:** MCQ results are wired to a **Concept Debt Ledger (CDL)**. Wrong answers create debts; mastery repairs them.
 - **Quota-Optimized:** Consolidates auditing and question generation into a single API call to survive trial-tier rate limits.
