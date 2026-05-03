@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional, Dict
 from tools.llm_client import llm_client
 from pipeline.prompts import EXPLANATION_SYSTEM_PROMPT
@@ -12,7 +13,10 @@ class ExplanationAgent:
         self.default_prompt = EXPLANATION_SYSTEM_PROMPT
         self.domain_prompt = ""
         
-        prompt_path = Path("pipeline/domain_prompt.txt")
+        # Load path from ENV or default
+        env_path = os.getenv("DOMAIN_PROMPT_PATH", "pipeline/domain_prompt.txt")
+        prompt_path = Path(env_path)
+        
         if prompt_path.exists():
             self.domain_prompt = prompt_path.read_text(encoding="utf-8")
 

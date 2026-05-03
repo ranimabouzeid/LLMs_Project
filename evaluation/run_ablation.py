@@ -10,8 +10,12 @@ sys.path.append(os.getcwd())
 
 from pipeline.teaching_pipeline import TeachingPipeline, AblationConfig
 from evaluation.llm_judge import evaluate_response
+from memory.db_init import init_db
 
 async def run_ablation_study():
+    # Ensure database is initialized before starting
+    init_db()
+    
     print("🚀 [Evaluation] Starting Multi-Config Ablation Study...")
     print("⚠️  QUOTA GUARD: 12s sleep between questions to stay under 5 RPM.")
     print("❄️  CACHE DISABLED: Measuring raw cold-start performance for report accuracy.")

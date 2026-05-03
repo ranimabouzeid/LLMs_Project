@@ -11,6 +11,9 @@ from ui.chat_window import render_chat_window
 from ui.debt_panel import render_debt_panel
 from ui.memory_panel import render_memory_panel
 
+# Ensure DB and tables exist on startup
+init_db()
+
 st.set_page_config(page_title="TutorMind", layout="wide")
 
 st.title("TutorMind")
